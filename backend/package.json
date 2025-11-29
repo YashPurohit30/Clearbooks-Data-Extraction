@@ -1,28 +1,26 @@
 {
-  "name": "backend",
+  "name": "clearbooks-backend",
   "version": "1.0.0",
-  "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node index.js",
     "dev": "nodemon --ignore tokens.json --ignore .env index.js"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
   "dependencies": {
     "axios": "^1.12.2",
     "bcryptjs": "^3.0.3",
-    "body-parser": "^2.2.0",
+    "body-parser": "^1.20.2",
     "cors": "^2.8.5",
-    "dotenv": "^17.2.3",
-    "express": "^5.1.0",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
     "jsonwebtoken": "^9.0.2",
-    "lucide-react": "^0.552.0",
-    "mongodb": "^7.0.0",
-    "mongoose": "^9.0.0"
+    "mongodb": "^6.8.0",
+    "mongoose": "^7.6.1"
   },
   "devDependencies": {
     "nodemon": "^3.1.10"
+  },
+  "engines": {
+    "node": "18.x"
   }
 }
