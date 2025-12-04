@@ -7,28 +7,23 @@ const Token = require("../Models/Token"); // 👈 NEW: MongoDB Token model
 /* ------------------------------------------------------------------ */
 /*  COMMON ERROR HANDLER FOR ROUTES                                   */
 /* ------------------------------------------------------------------ */
-function handleClearbooksError(routeName, err, res) {
-  console.error(`❌ ${routeName} error:`, err.response?.data || err.message);
-
-  // 🔹 ClearBooks connect hi nahi hua (Token doc missing)
+function handleClearbooksError(route, err, res) {
   if (err.code === "CLEARBOOKS_TOKENS_NOT_FOUND") {
     return res.status(400).json({
       success: false,
-      message:
-        "ClearBooks not connected on this server. Please connect from the UI first.",
+      message: "ClearBooks not connected. Please run Connect ClearBooks first.",
     });
   }
 
-  // 🔹 Token ya businessId incomplete
   if (err.code === "CLEARBOOKS_AUTH_INCOMPLETE") {
     return res.status(400).json({
       success: false,
-      message:
-        "Missing ClearBooks access token or business ID. Please reconnect ClearBooks.",
+      message: "ClearBooks token or business ID missing. Please reconnect.",
     });
   }
 
-  // 🔹 Baaki sab generic 500
+  console.error(`❌ ${route} error:`, err.response?.data || err.message);
+
   return res.status(500).json({
     success: false,
     message: err.response?.data?.error || err.message,
@@ -36,35 +31,33 @@ function handleClearbooksError(routeName, err, res) {
   });
 }
 
+
 /* ------------------------------------------------------------------ */
 /*  AUTH STORE: MongoDB BASED (NO tokens.json)                         */
 /* ------------------------------------------------------------------ */
 
-// ⚙️ Common function to load credentials from MongoDB
+// ⚙️ Common function to load credentials FROM MONGODB (no tokens.json)
 async function loadAuth() {
   const doc = await Token.findOne({ name: "clearbooks_main" });
 
   if (!doc) {
-    const error = new Error("clearbooks_tokens_not_found");
-    error.code = "CLEARBOOKS_TOKENS_NOT_FOUND";
-    throw error;
+    const err = new Error("clearbooks_tokens_not_found");
+    err.code = "CLEARBOOKS_TOKENS_NOT_FOUND";
+    throw err;
   }
 
   const accessToken = doc.accessToken;
   const businessId = doc.businessId || process.env.CLEARBOOKS_BUSINESS_ID;
 
   if (!accessToken || !businessId) {
-    const error = new Error("Missing access token or business ID");
-    error.code = "CLEARBOOKS_AUTH_INCOMPLETE";
-    throw error;
+    const err = new Error("Missing access token or business ID");
+    err.code = "CLEARBOOKS_AUTH_INCOMPLETE";
+    throw err;
   }
 
-  return {
-    accessToken,
-    businessId,
-    refreshToken: doc.refreshToken,
-  };
+  return { accessToken, businessId, refreshToken: doc.refreshToken };
 }
+
 
 // (Ye function tum auth callback me use kar sakte ho; agar already kahin aur bana liya
 // hai to ignore kar sakte ho, warna yahan se export karke use karo.)
