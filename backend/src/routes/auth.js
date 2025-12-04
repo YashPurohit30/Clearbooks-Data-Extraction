@@ -217,12 +217,12 @@
 
 
 
-// routes/auth.js
+/// routes/auth.js
 const express = require("express");
 const axios = require("axios");
-const fs = require("fs");
 const jwt = require("jsonwebtoken");
 const User = require("../Models/User");
+const Token = require("../Models/Token"); // 👈 NEW: MongoDB Token model
 require("dotenv").config();
 
 const router = express.Router();
@@ -230,8 +230,7 @@ const router = express.Router();
 const JWT_SECRET = process.env.JWT_SECRET || "super_secret_clearbooks_jwt_123";
 
 // 🌍 FRONTEND URL (Local + Render + Vercel)
-const FRONTEND_URL =
-  process.env.FRONTEND_URL || "http://localhost:5173";
+const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:5173";
 
 /* ===========================================================
    USER AUTH (REGISTER + LOGIN)
@@ -387,9 +386,17 @@ router.get("/callback", async (req, res) => {
     // 4️⃣ Save business_id inside tokenData
     tokenData.business_id = selected.id;
 
-    // 5️⃣ Save tokens.json
-    fs.writeFileSync("tokens.json", JSON.stringify(tokenData, null, 2));
-    console.log("💾 Tokens saved:", tokenData);
+    // 5️⃣ 🔄 Save tokens in MongoDB instead of tokens.json
+    await Token.findOneAndUpdate(
+      { name: "clearbooks_main" },
+      {
+        accessToken: tokenData.access_token,
+        refreshToken: tokenData.refresh_token,
+        businessId: tokenData.business_id,
+      },
+      { upsert: true, new: true }
+    );
+    console.log("💾 Tokens saved in MongoDB for clearbooks_main");
 
     // 6️⃣ Redirect to frontend
     return res.redirect(
@@ -410,10 +417,9 @@ router.get("/callback", async (req, res) => {
 // 🔌 Disconnect ClearBooks
 router.post("/disconnect", async (req, res) => {
   try {
-    if (fs.existsSync("tokens.json")) {
-      fs.unlinkSync("tokens.json");
-      console.log("🗑 tokens.json deleted");
-    }
+    await Token.deleteOne({ name: "clearbooks_main" }); // 👈 DB se tokens hatao
+
+    console.log("🗑 ClearBooks tokens deleted from MongoDB");
 
     return res.json({
       success: true,
