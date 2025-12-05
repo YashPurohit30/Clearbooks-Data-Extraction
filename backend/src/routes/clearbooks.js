@@ -8,26 +8,50 @@ const Token = require("../Models/Token"); // 👈 NEW: MongoDB Token model
 /*  COMMON ERROR HANDLER FOR ROUTES                                   */
 /* ------------------------------------------------------------------ */
 function handleClearbooksError(route, err, res) {
+  const apiError = err.response?.data;
+
+  // ✅ 1. BUSINESS SUBSCRIPTION NOT ACTIVE
+  if (
+    Array.isArray(apiError) &&
+    apiError[0]?.errorCode === "BUSINESS_NO_SUBSCRIPTION"
+  ) {
+    console.warn(`⚠️ ${route}: BUSINESS_NO_SUBSCRIPTION`);
+    return res.status(403).json({
+      success: false,
+      message:
+        "Your ClearBooks subscription does not support this feature. Please upgrade your plan.",
+      errorCode: "BUSINESS_NO_SUBSCRIPTION",
+    });
+  }
+
+  // ✅ 2. ClearBooks not connected
   if (err.code === "CLEARBOOKS_TOKENS_NOT_FOUND") {
     return res.status(400).json({
       success: false,
       message: "ClearBooks not connected. Please run Connect ClearBooks first.",
+      errorCode: "CLEARBOOKS_TOKENS_NOT_FOUND",
     });
   }
 
+  // ✅ 3. Token / business missing
   if (err.code === "CLEARBOOKS_AUTH_INCOMPLETE") {
     return res.status(400).json({
       success: false,
       message: "ClearBooks token or business ID missing. Please reconnect.",
+      errorCode: "CLEARBOOKS_AUTH_INCOMPLETE",
     });
   }
 
-  console.error(`❌ ${route} error:`, err.response?.data || err.message);
+  // ✅ 4. Generic fallback
+  console.error(`❌ ${route} error:`, apiError || err.message);
 
   return res.status(500).json({
     success: false,
-    message: err.response?.data?.error || err.message,
-    error: err.response?.data,
+    message:
+      (Array.isArray(apiError) && apiError[0]?.errorMessage) ||
+      apiError?.error ||
+      err.message,
+    error: apiError,
   });
 }
 

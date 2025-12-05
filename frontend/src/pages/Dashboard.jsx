@@ -43,6 +43,9 @@ const Dashboard = () => {
     !!localStorage.getItem("clearbooks_company")
   );
 
+  // ⭐ NEW: API message (subscription / connect issues, etc.)
+  const [apiMessage, setApiMessage] = useState("");
+
   // ✅ ClearBooks OAuth callback handle
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -77,6 +80,7 @@ const Dashboard = () => {
   const handleLogin = async (e) => {
     e.preventDefault();
     setLoginError("");
+    setApiMessage("");
 
     try {
       const res = await axios.post(`${API_BASE}/auth/login`, {
@@ -108,6 +112,7 @@ const Dashboard = () => {
     setToken("");
     setUser(null);
     setData([]);
+    setApiMessage("");
   };
 
   /* ------------------------------------------------------------------
@@ -125,10 +130,10 @@ const Dashboard = () => {
       console.error(err);
     }
 
-    // frontend side se clean
     localStorage.removeItem("clearbooks_company");
     setCompany("");
     setIsConnected(false);
+    setApiMessage("");
   };
 
   const fetchData = async () => {
@@ -143,6 +148,7 @@ const Dashboard = () => {
     }
 
     setLoading(true);
+    setApiMessage(""); // ⭐ clear old message
     try {
       const params = {};
       if (startDate) params.startDate = startDate;
@@ -156,38 +162,72 @@ const Dashboard = () => {
       });
 
       setData(res.data?.data || []);
+      if ((res.data?.data || []).length === 0) {
+        setApiMessage("No records found for the selected filter.");
+      }
     } catch (err) {
       console.error(err);
-      if (err.response?.status === 401) {
+      const status = err.response?.status;
+      const dataRes = err.response?.data;
+
+      // 401 → session / token issue
+      if (status === 401) {
         alert("Session expired / unauthorized. Please login again.");
         handleLogout();
-      } else {
-        alert("Failed to fetch data");
+        return;
       }
+
+      // 🔔 BUSINESS_NO_SUBSCRIPTION from backend
+      if (dataRes?.errorCode === "BUSINESS_NO_SUBSCRIPTION") {
+        const msg =
+          dataRes?.message ||
+          "This ClearBooks business does not have an active subscription for this feature.";
+        setApiMessage(msg);
+        alert(
+          "⚠️ ClearBooks subscription for this business does not allow this feature.\n\n" +
+            "Please contact the client / ClearBooks to enable or upgrade the plan."
+        );
+        return;
+      }
+
+      // 🔔 ClearBooks not connected / auth incomplete
+      if (
+        dataRes?.errorCode === "CLEARBOOKS_TOKENS_NOT_FOUND" ||
+        dataRes?.errorCode === "CLEARBOOKS_AUTH_INCOMPLETE"
+      ) {
+        const msg =
+          dataRes?.message ||
+          "ClearBooks connection issue. Please reconnect from the top-right Connect button.";
+        setApiMessage(msg);
+        alert(msg);
+        return;
+      }
+
+      // Generic fallback
+      const generic =
+        dataRes?.message || "Failed to fetch data. Please try again.";
+      setApiMessage(generic);
+      alert(generic);
     } finally {
       setLoading(false);
     }
   };
 
-const handleExport = () => {
-  if (!data.length) return;
+  const handleExport = () => {
+    if (!data.length) return;
 
-  const ws = XLSX.utils.json_to_sheet(data);
-  const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.json_to_sheet(data);
+    const wb = XLSX.utils.book_new();
 
-  XLSX.utils.book_append_sheet(wb, ws, "Data");
+    XLSX.utils.book_append_sheet(wb, ws, "Data");
 
-  // 📌 Clean readable name based on endpoint
-  const cleanName = endpoint.replace("/", "_");
+    const cleanName = endpoint.replace("/", "_");
+    const fileName = `${company || "ClearBooks"}_${cleanName}_${new Date()
+      .toISOString()
+      .slice(0, 10)}.xlsx`;
 
-  // 📌 Example: 542 Digital_Sales_Invoices_2025-11-28.xlsx
-  const fileName = `${company || "ClearBooks"}_${cleanName}_${new Date()
-    .toISOString()
-    .slice(0, 10)}.xlsx`;
-
-  XLSX.writeFile(wb, fileName);
-};
-
+    XLSX.writeFile(wb, fileName);
+  };
 
   /* ------------------------------------------------------------------
    🔐 IF NOT LOGGED IN → SHOW LOGIN / REGISTER PAGE
@@ -230,6 +270,7 @@ const handleExport = () => {
                 onSubmit={async (e) => {
                   e.preventDefault();
                   setLoginError("");
+                  setApiMessage("");
 
                   try {
                     const res = await axios.post(`${API_BASE}/auth/register`, {
@@ -240,7 +281,7 @@ const handleExport = () => {
 
                     if (res.data.success) {
                       alert("Account created successfully. Please login now.");
-                      setIsRegister(false); // back to login
+                      setIsRegister(false);
                     } else {
                       setLoginError(
                         res.data.message || "Registration failed"
@@ -388,7 +429,7 @@ const handleExport = () => {
 
   return (
     <>
-      {/* Ultra Clean Loader */}
+      {/* Loader */}
       <AnimatePresence>
         {loading && (
           <motion.div
@@ -410,7 +451,7 @@ const handleExport = () => {
       </AnimatePresence>
 
       <div className="min-h-screen bg-white text-gray-900 relative overflow-hidden">
-        {/* Subtle Silver Gradient Background */}
+        {/* Background */}
         <div className="fixed inset-0 pointer-events-none">
           <div className="absolute inset-0 bg-gradient-to-br from-gray-50 via-white to-gray-50"></div>
           <div className="absolute top-0 left-0 w-96 h-96 bg-gradient-to-br from-gray-200/20 to-transparent rounded-full blur-3xl"></div>
@@ -444,7 +485,6 @@ const handleExport = () => {
             className="flex items-center justify-between mb-16"
           >
             <div className="flex items-center gap-6">
-              {/* Premium Silver Logo */}
               <div className="relative group">
                 <div className="absolute inset-0 bg-gradient-to-br from-gray-400 to-gray-600 rounded-3xl blur-2xl opacity-50 group-hover:opacity-70 transition-all duration-500"></div>
                 <div className="relative p-3 bg-white rounded-3xl shadow-2xl border border-gray-200">
@@ -469,9 +509,7 @@ const handleExport = () => {
               </div>
             </div>
 
-            {/* Right side: user info + connect/disconnect + logout */}
             <div className="flex items-center gap-4">
-              {/* User Info */}
               {user && (
                 <div className="text-right">
                   <p className="text-sm text-gray-600">Logged in as</p>
@@ -482,7 +520,6 @@ const handleExport = () => {
                 </div>
               )}
 
-              {/* Connect / Connected Box */}
               {!isConnected ? (
                 <motion.button
                   whileHover={{ scale: 1.04 }}
@@ -511,7 +548,6 @@ const handleExport = () => {
                     </div>
                   </div>
 
-                  {/* Disconnect ClearBooks */}
                   <button
                     onClick={handleDisconnect}
                     className="px-4 py-2 bg-white border border-gray-300 rounded-2xl text-xs text-gray-700 hover:border-red-400 hover:text-red-500"
@@ -521,7 +557,6 @@ const handleExport = () => {
                 </div>
               )}
 
-              {/* App Logout */}
               <button
                 onClick={handleLogout}
                 className="px-4 py-2 bg-gray-100 border border-gray-300 rounded-2xl text-sm text-gray-700 hover:border-gray-900"
@@ -538,12 +573,19 @@ const handleExport = () => {
             transition={{ delay: 0.3 }}
             className="bg-white/80 backdrop-blur-2xl border border-gray-200 rounded-3xl p-10 mb-10 shadow-2xl"
           >
-            <div className="flex items-center gap-4 mb-10">
+            <div className="flex items-center gap-4 mb-6">
               <HiOutlineCog className="w-8 h-8 text-gray-700" />
               <h2 className="text-2xl font-light text-gray-800">
                 Control Panel
               </h2>
             </div>
+
+            {/* 🔔 API message banner */}
+            {apiMessage && (
+              <div className="mb-6 text-sm text-red-600 bg-red-50 border border-red-200 rounded-2xl px-4 py-3">
+                {apiMessage}
+              </div>
+            )}
 
             <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-10">
               <div className="md:col-span-2">
